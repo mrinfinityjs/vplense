@@ -1,0 +1,2341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'matrix-green': '#00ff41',
+                        'matrix-dark': '#0d1117',
+                        'matrix-gray': '#161b22'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .scramble-text {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        
+        .menu-overlay {
+            position: absolute;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #00ff41;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+        }
+        
+        .chat-message {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-out {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+        
+        @keyframes fadeOut {
+            to { opacity: 0; transform: scale(0.95); }
+        }
+        
+        .red-flash {
+            animation: redFlash 0.5s ease-out;
+        }
+        
+        @keyframes redFlash {
+            0%, 100% { background-color: transparent; }
+            50% { background-color: rgba(255, 0, 0, 0.3); }
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-height: 300px;
+        }
+        
+        .video-container iframe {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+        }
+        
+        /* Ensure no scrollbars on main content */
+        body {
+            overflow-x: hidden;
+        }
+        
+        /* Make sure the main layout takes full height */
+        .min-h-screen {
+            height: 100vh;
+        }
+
+        /* Custom scrollbar styles */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0d1117;
+            border-radius: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #00ff41;
+            border-radius: 6px;
+            border: 2px solid #0d1117;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00cc33;
+        }
+
+        ::-webkit-scrollbar-corner {
+            background: #0d1117;
+        }
+
+        /* Live Feed collapsible styles */
+        .live-feed-collapsed {
+            height: 48px;
+            overflow: hidden;
+        }
+
+        .live-feed-expanded {
+            height: 192px;
+        }
+
+        .live-feed-toggle {
+            transition: transform 0.3s ease;
+        }
+
+        .live-feed-toggle.rotated {
+            transform: rotate(180deg);
+        }
+
+        /* Message type styles */
+        .chat-message.rate-limit {
+            border-left: 3px solid #ff6b35;
+            background-color: rgba(255, 107, 53, 0.1);
+        }
+
+        .chat-message.excessive-limit {
+            border-left: 3px solid #ff0000;
+            background-color: rgba(255, 0, 0, 0.1);
+        }
+
+        .chat-message.topic-update {
+            border-left: 3px solid #00ff41;
+            background-color: rgba(0, 255, 65, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-black text-white min-h-screen">
+
+    <!-- Main Layout (Mobile-style for all screen sizes) -->
+    <div id="app" class="min-h-screen flex flex-col">
+    <!-- Admin Login Modal -->
+        <div v-if="showAdminModal" class="fixed inset-0 bg-black bg-opacity-75 z-50">
+        <div class="flex items-center justify-center min-h-screen">
+            <div class="bg-matrix-gray p-8 rounded-lg border-2 border-matrix-green">
+                <h2 class="text-2xl font-bold text-matrix-green mb-4">Admin Login</h2>
+                    <input type="password" v-model="adminPassword" placeholder="Enter admin password" 
+                       class="w-full p-3 bg-black border border-matrix-green rounded text-white mb-4">
+                <div class="flex gap-2">
+                        <button @click="adminLogin()" class="px-4 py-2 bg-matrix-green text-black rounded hover:bg-green-400">
+                        Login
+                    </button>
+                        <button @click="closeAdminModal()" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Universal Confirmation Modal -->
+        <div v-if="confirmModal.show" class="fixed inset-0 bg-black bg-opacity-75 z-50">
+            <div class="flex items-center justify-center min-h-screen">
+                <div class="bg-matrix-gray p-8 rounded-lg border-2 border-matrix-green max-w-md">
+                    <h2 class="text-2xl font-bold text-matrix-green mb-4" v-text="confirmModal.title"></h2>
+                    <p class="text-white mb-6" v-text="confirmModal.message"></p>
+                    <div class="flex gap-2">
+                        <button @click="confirmAction()" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                            Yes
+                        </button>
+                        <button @click="hideConfirmModal()" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Source Modal -->
+        <div v-if="videoSourceModal.show" class="fixed inset-0 bg-black bg-opacity-75 z-50">
+            <div class="flex items-center justify-center min-h-screen">
+                <div class="bg-matrix-gray p-8 rounded-lg border-2 border-matrix-green max-w-md w-full">
+                    <h2 class="text-2xl font-bold text-matrix-green mb-4">Change Video Source</h2>
+                    <div class="mb-4">
+                        <label class="block text-matrix-green font-bold mb-2">Video URL or ID</label>
+                        <input type="text" v-model="videoSourceModal.url" placeholder="YouTube URL, Twitch URL, or Video ID" 
+                               class="w-full p-3 bg-black border border-matrix-green rounded text-white mb-2">
+                        <p class="text-sm text-gray-400">
+                            Examples:<br>
+                            • YouTube: https://www.youtube.com/watch?v=dQw4w9WgXcQ<br>
+                            • Twitch: https://www.twitch.tv/username<br>
+                            • YouTube Live: https://www.youtube.com/watch?v=LIVE_ID
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="changeVideoSource()" class="px-4 py-2 bg-matrix-green text-black rounded hover:bg-green-400">
+                            Update Video
+                        </button>
+                        <button @click="closeVideoSourceModal()" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div v-if="settingsModal.show" class="fixed inset-0 bg-black bg-opacity-75 z-50">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-8 rounded-lg border-2 border-matrix-green max-w-2xl w-full max-h-96 overflow-y-auto">
+                    <h2 class="text-2xl font-bold text-matrix-green mb-4">System Settings</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-matrix-green font-bold mb-2">Application Name</label>
+                            <input type="text" v-model="settingsModal.config.app_name" 
+                                   class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Global Rate Limit</label>
+                                <input type="text" v-model="settingsModal.config.rate_limit_global" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Per-IP Rate Limit</label>
+                                <input type="text" v-model="settingsModal.config.rate_limit_per_ip" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Global Block Duration (seconds)</label>
+                                <input type="number" v-model.number="settingsModal.config.rate_limit_global_block_for" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Per-IP Block Duration (seconds)</label>
+                                <input type="number" v-model.number="settingsModal.config.rate_limit_per_ip_block_for" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Excessive Rate Limit</label>
+                                <input type="text" v-model="settingsModal.config.rate_limit_excessive" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Excessive Block Duration (seconds)</label>
+                                <input type="number" v-model.number="settingsModal.config.rate_limit_excessive_block_for" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Auto-Whitelist Comments</label>
+                                <input type="text" v-model="settingsModal.config.auto_whitelist_comments_accepted" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Auto-Whitelist Questions</label>
+                                <input type="text" v-model="settingsModal.config.auto_whitelist_questions_answered" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Auto-Blacklist Comments</label>
+                                <input type="text" v-model="settingsModal.config.auto_blacklist_comments_rejected" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Auto-Blacklist Questions</label>
+                                <input type="text" v-model="settingsModal.config.auto_blacklist_questions_rejected" 
+                                       class="w-full p-2 bg-black border border-matrix-green rounded text-white">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-6">
+                        <button @click="saveSettings()" class="px-4 py-2 bg-matrix-green text-black rounded hover:bg-green-400">
+                            Save Settings
+                        </button>
+                        <button @click="closeSettingsModal()" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- IP Management Modal -->
+        <div v-if="ipModal.show" class="fixed inset-0 bg-black bg-opacity-75 z-50">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-8 rounded-lg border-2 border-matrix-green max-w-4xl w-full max-h-96 overflow-y-auto">
+                    <h2 class="text-2xl font-bold text-matrix-green mb-4">IP Management: <span v-text="ipModal.ip"></span></h2>
+                    <div class="mb-4">
+                        <div class="flex gap-2 mb-4">
+                            <button @click="whitelistIP(ipModal.ip)" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                                Whitelist IP
+                            </button>
+                            <button @click="blacklistIP(ipModal.ip)" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                                Blacklist IP
+                            </button>
+                        </div>
+                        <div class="bg-black p-4 rounded border border-matrix-green max-h-48 overflow-y-auto">
+                            <h3 class="text-matrix-green font-bold mb-2">Activity History</h3>
+                            <div v-for="activity in ipModal.history" :key="activity.id" class="text-sm mb-2 p-2 bg-gray-800 rounded">
+                                <div class="text-gray-400" v-text="activity.timestamp"></div>
+                                <div v-text="activity.type + ': ' + activity.message"></div>
+                            </div>
+                            <div v-if="ipModal.history.length === 0" class="text-gray-400 text-center py-4">
+                                No activity history available
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="closeIPModal()" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- Top Icon Bar -->
+            <div id="mobileTopBar" class="flex justify-center space-x-4 p-4 bg-matrix-gray border-b border-matrix-green">
+                <button @click="toggleMobileMenu('ask')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                    <i class="fas fa-question"></i>
+                </button>
+                <button @click="toggleMobileMenu('comment')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                    <i class="fas fa-comment"></i>
+                </button>
+                <button @click="toggleMobileMenu('topics')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                    <i class="fas fa-tags"></i>
+                </button>
+                <button @click="toggleMobileMenu('questions')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                    <i class="fas fa-question-circle"></i>
+                </button>
+                <button @click="toggleMobileMenu('comments')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                    <i class="fas fa-comments"></i>
+                </button>
+                <button @click="toggleMobileMenu('statistics')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                    <i class="fas fa-chart-bar"></i>
+                </button>
+            </div>
+
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-h-0 p-4">
+            <!-- Current Question/Comment Display -->
+            <div id="currentDisplay" class="mb-4 p-4 bg-matrix-gray rounded border border-matrix-green text-center">
+                <div v-if="currentQuestion" class="current-question">
+                    <h3 class="text-matrix-green font-bold mb-2">Question:</h3>
+                    <p class="text-lg" v-text="currentQuestion.text"></p>
+                    <div v-if="isAdmin" class="mt-2 flex gap-2 justify-center">
+                        <button @click="answerQuestion()" class="px-3 py-1 bg-green-600 text-white rounded text-sm">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button @click="removeQuestion()" class="px-3 py-1 bg-red-600 text-white rounded text-sm">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div v-if="currentComment" class="current-comment">
+                    <h3 class="text-matrix-green font-bold mb-2">Comment:</h3>
+                    <p class="text-lg" v-text="currentComment.text"></p>
+                    <div v-if="isAdmin" class="mt-2 flex gap-2 justify-center">
+                        <button @click="answerComment()" class="px-3 py-1 bg-green-600 text-white rounded text-sm">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button @click="removeComment()" class="px-3 py-1 bg-red-600 text-white rounded text-sm">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video Container -->
+            <div class="video-container mb-4 flex-1 min-h-0">
+                <iframe :src="currentVideoSource" 
+                        frameborder="0" allowfullscreen class="w-full h-full"></iframe>
+            </div>
+
+            <!-- Live Chat Feed -->
+            <div id="chatFeed" class="bg-matrix-gray rounded border border-matrix-green overflow-hidden transition-all duration-300" :class="liveFeedCollapsed ? 'live-feed-collapsed' : 'live-feed-expanded'">
+                <div class="flex items-center justify-between p-4 cursor-pointer" @click="toggleLiveFeed()">
+                    <div class="text-matrix-green font-bold">Live Feed</div>
+                    <i class="fas fa-chevron-up text-matrix-green live-feed-toggle" :class="{ 'rotated': liveFeedCollapsed }"></i>
+                </div>
+                <div id="chatMessages" class="px-4 pb-4 overflow-y-auto" :class="liveFeedCollapsed ? 'hidden' : 'block'"></div>
+            </div>
+        </div>
+
+        <!-- Bottom Admin Bar -->
+        <div v-if="isAdmin" id="mobileBottomBar" class="flex justify-center space-x-4 p-4 bg-matrix-gray border-t border-matrix-green">
+            <button @click="toggleMobileMenu('adminQuestions')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                <i class="fas fa-list"></i>
+            </button>
+            <button @click="toggleMobileMenu('adminComments')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                <i class="fas fa-comments"></i>
+            </button>
+            <button @click="toggleMobileMenu('adminTopics')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                <i class="fas fa-tags"></i>
+            </button>
+            <button @click="openSettingsModal()" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                <i class="fas fa-cog"></i>
+            </button>
+            <button @click="toggleMobileMenu('adminACL')" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                <i class="fas fa-shield-alt"></i>
+            </button>
+            <button @click="openVideoSourceModal()" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                <i class="fas fa-video"></i>
+            </button>
+            <button @click="openGiveawayModal()" class="p-2 hover:bg-matrix-green hover:text-black rounded">
+                <i class="fas fa-gift"></i>
+            </button>
+            <button @click="resetAllData()" class="p-2 hover:bg-red-600 hover:text-white rounded">
+                <i class="fas fa-trash"></i>
+            </button>
+            <button @click="adminLogout()" class="p-2 hover:bg-red-600 hover:text-white rounded">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+
+        <!-- Mobile Menu Overlays -->
+        <div id="mobileAskMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-md">
+                    <h3 class="text-matrix-green font-bold mb-3">Ask a question</h3>
+                    <textarea id="mobileQuestionInput" placeholder="Enter your question..." 
+                              class="w-full p-3 bg-black border border-matrix-green rounded text-white mb-3 h-24 resize-none"></textarea>
+                    <div class="flex gap-2">
+                        <button @click="submitMobileQuestion()" class="px-4 py-2 bg-matrix-green text-black rounded hover:bg-green-400">
+                            Ask
+                        </button>
+                        <button @click="closeMobileMenu('ask')" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobileCommentMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-md">
+                    <h3 class="text-matrix-green font-bold mb-3">Add a comment</h3>
+                    <textarea id="mobileCommentInput" placeholder="Enter your comment..." 
+                              class="w-full p-3 bg-black border border-matrix-green rounded text-white mb-3 h-24 resize-none"></textarea>
+                    <div class="flex gap-2">
+                        <button @click="submitMobileComment()" class="px-4 py-2 bg-matrix-green text-black rounded hover:bg-green-400">
+                            Comment
+                        </button>
+                        <button @click="closeMobileMenu('comment')" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobileTopicsMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-md max-h-96 overflow-y-auto">
+                    <h3 class="text-matrix-green font-bold mb-3">Stream Topics</h3>
+                    <div class="space-y-2">
+                        <div v-for="topic in topics" :key="topic.id" class="p-2 bg-black rounded border border-matrix-green">
+                            <p class="text-sm" v-text="topic.text"></p>
+                    </div>
+                        <div v-if="topics.length === 0" class="text-gray-400 text-center py-4">
+                            No topics
+                        </div>
+                    </div>
+                    <button @click="closeMobileMenu('topics')" class="mt-4 px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobileQuestionsMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-md max-h-96 overflow-y-auto">
+                    <h3 class="text-matrix-green font-bold mb-3">Questions & Answers</h3>
+                    <div class="space-y-2">
+                        <div v-for="question in answeredQuestions" :key="question.id" class="p-2 bg-black rounded border border-matrix-green">
+                            <p class="text-sm" v-text="question.text"></p>
+                    </div>
+                        <div v-if="answeredQuestions.length === 0" class="text-gray-400 text-center py-4">
+                            No answered questions
+                        </div>
+                    </div>
+                    <button @click="closeMobileMenu('questions')" class="mt-4 px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobileCommentsMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-md max-h-96 overflow-y-auto">
+                    <h3 class="text-matrix-green font-bold mb-3">Accepted Comments</h3>
+                    <div class="space-y-2">
+                        <div v-for="comment in answeredComments" :key="comment.id" class="p-2 bg-black rounded border border-matrix-green">
+                            <p class="text-sm" v-text="comment.text"></p>
+                        </div>
+                        <div v-if="answeredComments.length === 0" class="text-gray-400 text-center py-4">
+                            No accepted comments
+                        </div>
+                    </div>
+                    <button @click="closeMobileMenu('comments')" class="mt-4 px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobileStatisticsMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-md">
+                    <h3 class="text-matrix-green font-bold mb-3">Statistics</h3>
+                    <div class="space-y-2">
+                        <div>Questions asked: <span v-text="statistics.questions_asked"></span></div>
+                        <div>Questions answered: <span v-text="statistics.questions_answered"></span></div>
+                        <div>Comments given: <span v-text="statistics.comments_given"></span></div>
+                        <div>Comments accepted: <span v-text="statistics.comments_accepted"></span></div>
+                    </div>
+                    <button @click="closeMobileMenu('statistics')" class="mt-4 px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Admin Menus -->
+        <div id="mobileAdminQuestionsMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-md max-h-96 overflow-y-auto">
+                    <h3 class="text-matrix-green font-bold mb-3">Pending Questions</h3>
+                    <div class="space-y-2">
+                        <div v-for="question in questions" :key="question.id" class="p-2 bg-black rounded border border-matrix-green">
+                            <p class="text-sm mb-2" v-text="question.text"></p>
+                            <div class="flex gap-2">
+                                <button @click="acceptQuestion(question.id)" class="px-2 py-1 bg-green-600 text-white rounded text-xs">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button @click="deleteQuestion(question.id)" class="px-2 py-1 bg-red-600 text-white rounded text-xs">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                    </div>
+                        </div>
+                        <div v-if="questions.length === 0" class="text-gray-400 text-center py-4">
+                            No pending questions
+                        </div>
+                    </div>
+                    <button @click="closeMobileMenu('adminQuestions')" class="mt-4 px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobileAdminCommentsMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-md max-h-96 overflow-y-auto">
+                    <h3 class="text-matrix-green font-bold mb-3">Pending Comments</h3>
+                    <div class="space-y-2">
+                        <div v-for="comment in pendingComments" :key="comment.id" class="p-2 bg-black rounded border border-matrix-green">
+                            <p class="text-sm mb-2" v-text="comment.text"></p>
+                            <div class="flex gap-2">
+                                <button @click="acceptComment(comment.id)" class="px-2 py-1 bg-green-600 text-white rounded text-xs">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button @click="deleteComment(comment.id)" class="px-2 py-1 bg-red-600 text-white rounded text-xs">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                    </div>
+                        </div>
+                        <div v-if="pendingComments.length === 0" class="text-gray-400 text-center py-4">
+                            No pending comments
+                        </div>
+                    </div>
+                    <button @click="closeMobileMenu('adminComments')" class="mt-4 px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobileAdminTopicsMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-md max-h-96 overflow-y-auto">
+                    <h3 class="text-matrix-green font-bold mb-3">Manage Topics</h3>
+                    <div class="space-y-2">
+                        <div v-for="topic in topics" :key="topic.id" class="p-2 bg-black rounded border border-matrix-green">
+                            <p class="text-sm mb-2" v-text="topic.text"></p>
+                            <button @click="deleteTopic(topic.id)" class="px-2 py-1 bg-red-600 text-white rounded text-xs">
+                                <i class="fas fa-times"></i>
+                            </button>
+                    </div>
+                        <div v-if="topics.length === 0" class="text-gray-400 text-center py-4">
+                            No topics
+                        </div>
+                    </div>
+                    <button @click="addNewTopic()" class="mt-4 px-4 py-2 bg-matrix-green text-black rounded hover:bg-green-400">
+                        Add Topic
+                    </button>
+                    <button @click="closeMobileMenu('adminTopics')" class="mt-2 px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobileAdminACLMenu" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green w-full max-w-2xl max-h-96 overflow-y-auto">
+                    <h3 class="text-matrix-green font-bold mb-3">Access Control Lists</h3>
+                    <div class="flex gap-2 mb-4">
+                        <button @click="aclTab = 'whitelist'" :class="aclTab === 'whitelist' ? 'bg-matrix-green text-black' : 'bg-gray-600'" 
+                                class="px-4 py-2 rounded">
+                            Whitelist
+                        </button>
+                        <button @click="aclTab = 'blacklist'" :class="aclTab === 'blacklist' ? 'bg-matrix-green text-black' : 'bg-gray-600'" 
+                                class="px-4 py-2 rounded">
+                            Blacklist
+                        </button>
+                    </div>
+                    
+                    <!-- Whitelist Tab -->
+                    <div v-if="aclTab === 'whitelist'">
+                        <div class="space-y-2">
+                            <div v-for="entry in whitelist" :key="entry.ip" class="p-2 bg-black rounded border border-matrix-green">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <div class="text-sm font-bold text-matrix-green" v-text="entry.ip"></div>
+                                        <div class="text-xs text-gray-400" v-text="entry.added_at"></div>
+                                        <div class="text-xs text-gray-300" v-text="entry.reason"></div>
+                                    </div>
+                                    <button @click="removeFromWhitelist(entry.ip)" class="px-2 py-1 bg-red-600 text-white rounded text-xs">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div v-if="whitelist.length === 0" class="text-gray-400 text-center py-4">
+                                No whitelisted IPs
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Blacklist Tab -->
+                    <div v-if="aclTab === 'blacklist'">
+                        <div class="space-y-2">
+                            <div v-for="entry in blacklist" :key="entry.ip" class="p-2 bg-black rounded border border-matrix-green">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <div class="text-sm font-bold text-red-400" v-text="entry.ip"></div>
+                                        <div class="text-xs text-gray-400" v-text="entry.added_at"></div>
+                                        <div class="text-xs text-gray-300" v-text="entry.reason"></div>
+                                    </div>
+                                    <button @click="removeFromBlacklist(entry.ip)" class="px-2 py-1 bg-red-600 text-white rounded text-xs">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div v-if="blacklist.length === 0" class="text-gray-400 text-center py-4">
+                                No blacklisted IPs
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button @click="closeMobileMenu('adminACL')" class="mt-4 px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Giveaway Management Modal -->
+        <div v-if="giveawayModal.show" class="fixed inset-0 bg-black bg-opacity-75 z-50">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-8 rounded-lg border-2 border-matrix-green max-w-4xl w-full max-h-96 overflow-y-auto">
+                    <h2 class="text-2xl font-bold text-matrix-green mb-4">Giveaway Management</h2>
+                    
+                    <!-- Create New Giveaway Form -->
+                    <div class="mb-6 p-4 bg-black rounded border border-matrix-green">
+                        <h3 class="text-matrix-green font-bold mb-3">Create New Giveaway</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Giveaway Name</label>
+                                <input type="text" v-model="giveawayModal.newGiveaway.name" 
+                                       placeholder="Enter giveaway name" 
+                                       class="w-full p-2 bg-gray-800 border border-matrix-green rounded text-white">
+                            </div>
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Delay (minutes)</label>
+                                <select v-model="giveawayModal.newGiveaway.delay_minutes" 
+                                        class="w-full p-2 bg-gray-800 border border-matrix-green rounded text-white">
+                                    <option value="0">Start Immediately</option>
+                                    <option value="5">5 minutes</option>
+                                    <option value="10">10 minutes</option>
+                                    <option value="30">30 minutes</option>
+                                    <option value="60">60 minutes</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-matrix-green font-bold mb-2">Recurring Interval (minutes)</label>
+                                <select v-model="giveawayModal.newGiveaway.recurring_interval" 
+                                        class="w-full p-2 bg-gray-800 border border-matrix-green rounded text-white">
+                                    <option value="0">Not Recurring</option>
+                                    <option value="5">5 minutes</option>
+                                    <option value="10">10 minutes</option>
+                                    <option value="30">30 minutes</option>
+                                    <option value="60">60 minutes</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center">
+                                <label class="flex items-center text-matrix-green">
+                                    <input type="checkbox" v-model="giveawayModal.newGiveaway.remove_on_accept" 
+                                           class="mr-2">
+                                    Remove from list once accepted
+                                </label>
+                            </div>
+                        </div>
+                        <button @click="createGiveaway()" class="mt-4 px-4 py-2 bg-matrix-green text-black rounded hover:bg-green-400">
+                            Create Giveaway
+                        </button>
+                    </div>
+
+                    <!-- Existing Giveaways List -->
+                    <div class="space-y-4">
+                        <h3 class="text-matrix-green font-bold">Giveaway Management</h3>
+                        <p class="text-sm text-gray-400">Create giveaways and add items, then start them when ready. Use Start/Stop/Pause to control active giveaways.</p>
+                        <div v-for="giveaway in giveaways" :key="giveaway.id" class="p-4 bg-black rounded border border-matrix-green">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 class="text-matrix-green font-bold" v-text="giveaway.name"></h4>
+                                    <div class="text-sm text-gray-400">
+                                        <span v-if="giveaway.recurring_interval > 0">Recurring every <span v-text="giveaway.recurring_interval"></span> minutes</span>
+                                        <span v-else>One-time giveaway</span>
+                                        <span v-if="giveaway.status === 'pending'" class="text-yellow-400"> - Pending</span>
+                                        <span v-else-if="giveaway.status === 'active'" class="text-green-400"> - Active</span>
+                                        <span v-else-if="giveaway.status === 'paused'" class="text-orange-400"> - Paused</span>
+                                        <span v-else-if="giveaway.status === 'stopped'" class="text-red-400"> - Stopped</span>
+                                    </div>
+                                </div>
+                                <div class="flex gap-1">
+                                    <!-- Status control buttons -->
+                                    <button v-if="giveaway.status === 'pending'" @click="startGiveaway(giveaway.id)" 
+                                            class="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-500">
+                                        <i class="fas fa-play"></i> Start
+                                    </button>
+                                    <button v-if="giveaway.status === 'active'" @click="pauseGiveaway(giveaway.id)" 
+                                            class="px-2 py-1 bg-orange-600 text-white rounded text-xs hover:bg-orange-500">
+                                        <i class="fas fa-pause"></i> Pause
+                                    </button>
+                                    <button v-if="giveaway.status === 'paused'" @click="startGiveaway(giveaway.id)" 
+                                            class="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-500">
+                                        <i class="fas fa-play"></i> Resume
+                                    </button>
+                                    <button v-if="giveaway.status === 'active' || giveaway.status === 'paused'" @click="stopGiveaway(giveaway.id)" 
+                                            class="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-500">
+                                        <i class="fas fa-stop"></i> Stop
+                                    </button>
+                                    <button @click="deleteGiveaway(giveaway.id)" class="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-500">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Items List -->
+                            <div class="mt-3">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm text-matrix-green font-bold">Items (<span v-text="giveaway.items.length"></span>)</span>
+                                    <button @click="showAddItemForm(giveaway.id)" 
+                                            class="px-2 py-1 bg-matrix-green text-black rounded text-xs hover:bg-green-400">
+                                        <i class="fas fa-plus"></i> Add Item
+                                    </button>
+                                </div>
+                                <div v-if="giveaway.items.length === 0" class="text-gray-500 text-sm italic p-2 bg-gray-800 rounded">
+                                    No items added yet. Click "Add Item" to add giveaway items.
+                                </div>
+                                <div v-for="item in giveaway.items" :key="item.id" 
+                                     class="flex justify-between items-center p-2 bg-gray-800 rounded mb-1 hover:bg-gray-700 transition-colors">
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium text-white" v-text="item.name"></div>
+                                        <div v-if="item.link" class="text-xs text-gray-400 break-all" v-text="item.link"></div>
+                                    </div>
+                                    <button @click="deleteGiveawayItem(giveaway.id, item.id)" 
+                                            class="px-1 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-500 ml-2">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="giveaways.length === 0" class="text-gray-400 text-center py-4">
+                            No giveaways created yet
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 mt-6">
+                        <button @click="closeGiveawayModal()" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Item Modal -->
+        <div v-if="addItemModal.show" class="fixed inset-0 bg-black bg-opacity-75 z-50">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-6 rounded-lg border-2 border-matrix-green max-w-md w-full">
+                    <h2 class="text-2xl font-bold text-matrix-green mb-4">Add Giveaway Item</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-matrix-green font-bold mb-2">Item Name</label>
+                            <input type="text" v-model="addItemModal.name" 
+                                   placeholder="Enter item name" 
+                                   class="w-full p-3 bg-black border border-matrix-green rounded text-white">
+                        </div>
+                        <div>
+                            <label class="block text-matrix-green font-bold mb-2">Item Link (optional)</label>
+                            <input type="text" v-model="addItemModal.link" 
+                                   placeholder="Enter item link" 
+                                   class="w-full p-3 bg-black border border-matrix-green rounded text-white">
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-6">
+                        <button @click="addGiveawayItem()" class="px-4 py-2 bg-matrix-green text-black rounded hover:bg-green-400">
+                            Add Item
+                        </button>
+                        <button @click="closeAddItemModal()" class="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Winner Notification Modal -->
+        <div v-if="winnerModal.show" class="fixed inset-0 bg-black bg-opacity-75 z-50" @click="closeWinnerModal()">
+            <div class="flex items-center justify-center min-h-screen p-4" @click.stop>
+                <div class="bg-matrix-gray p-8 rounded-lg border-2 border-matrix-green max-w-md">
+                    <h2 class="text-2xl font-bold text-matrix-green mb-4">🎉 You Won!</h2>
+                    <div class="text-center mb-6">
+                        <p class="text-lg mb-2">Congratulations! You won a giveaway item from:</p>
+                        <p class="text-matrix-green font-bold text-xl" v-text="winnerModal.giveaway_name"></p>
+                        <div class="mt-4 p-4 bg-black rounded border border-matrix-green">
+                            <p class="text-matrix-green font-bold" v-text="winnerModal.item.name"></p>
+                            <p v-if="winnerModal.item.link" class="text-sm text-gray-400 mt-2" v-text="winnerModal.item.link"></p>
+                        </div>
+                        <p class="text-sm text-gray-400 mt-2">
+                            You have <span class="text-matrix-green font-bold" v-text="winnerCountdown"></span> seconds to respond
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="acceptGiveaway()" class="px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700 flex-1">
+                            Accept
+                        </button>
+                        <button @click="payItForward()" class="px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 flex-1">
+                            Pay It Forward
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Item Details Modal -->
+        <div v-if="itemDetailsModal.show" class="fixed inset-0 bg-black bg-opacity-75 z-50">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-matrix-gray p-8 rounded-lg border-2 border-matrix-green max-w-md">
+                    <h2 class="text-2xl font-bold text-matrix-green mb-4">Your Prize Details</h2>
+                    <div class="text-center mb-6">
+                        <p class="text-lg mb-2">You accepted a giveaway item from:</p>
+                        <p class="text-matrix-green font-bold text-xl" v-text="itemDetailsModal.giveaway_name"></p>
+                        <div class="mt-4 p-4 bg-black rounded border border-matrix-green">
+                            <p class="text-matrix-green font-bold" v-text="itemDetailsModal.item.name"></p>
+                            <p v-if="itemDetailsModal.item.link" class="text-sm text-gray-400 mt-2" v-text="itemDetailsModal.item.link"></p>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="closeItemDetailsModal()" class="px-6 py-3 bg-matrix-green text-black rounded hover:bg-green-400 flex-1">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center p-2 bg-matrix-gray border-t border-matrix-green">
+            <h1 id="logo" class="text-lg font-bold scramble-text text-matrix-green cursor-pointer hover:text-green-300 transition-colors" @click="openAdminModal()" title="Click to open admin login"></h1>
+            <p id="serverIp" class="text-xs text-gray-400 scramble-text"></p>
+        </div>
+    </div>
+
+    <!-- Desktop Layout Removed - Using Mobile Layout for All Screen Sizes -->
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    socket: null,
+                    isAdmin: false,
+                    showAdminModal: false,
+                    adminPassword: '',
+                    konamiCode: [],
+                    konamiSequence: ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight'],
+                    currentQuestion: null,
+                    currentComment: null,
+                    pendingComments: [],
+                    questions: [],
+                    answeredQuestions: [],
+                    answeredComments: [],
+                    topics: [],
+                    statistics: {
+                        questions_asked: 0,
+                        questions_answered: 0,
+                        comments_given: 0,
+                        comments_accepted: 0
+                    },
+                    confirmModal: {
+                        show: false,
+                        title: '',
+                        message: '',
+                        onConfirm: null
+                    },
+                    currentVideoSource: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+                    videoSourceModal: {
+                        show: false,
+                        url: ''
+                    },
+                    settingsModal: {
+                        show: false,
+                        config: {}
+                    },
+                    ipModal: {
+                        show: false,
+                        ip: '',
+                        history: []
+                    },
+                    aclTab: 'whitelist',
+                    whitelist: [],
+                    blacklist: [],
+                    liveFeedCollapsed: false,
+                    giveaways: [],
+                    giveawayModal: {
+                        show: false,
+                        newGiveaway: {
+                            name: '',
+                            delay_minutes: 0,
+                            recurring_interval: 0,
+                            remove_on_accept: true
+                        }
+                    },
+                    addItemModal: {
+                        show: false,
+                        giveaway_id: '',
+                        name: '',
+                        link: ''
+                    },
+                    winnerModal: {
+                        show: false,
+                        giveaway_id: '',
+                        giveaway_name: '',
+                        item: {},
+                        timeout: 30
+                    },
+                    itemDetailsModal: {
+                        show: false,
+                        giveaway_name: '',
+                        item: {}
+                    },
+                    winnerCountdown: 0,
+                    winnerCountdownTimer: null
+                }
+            },
+            mounted() {
+                this.initializeScrambling();
+                this.initializeSocket();
+                this.loadStatistics();
+                this.loadTopics();
+                this.loadQuestions();
+                this.loadComments();
+                this.loadAnsweredQuestions();
+                this.loadAnsweredComments();
+                this.setupKonamiCode();
+                this.updatePageTitle();
+                
+                // Check admin status periodically
+                this.checkAdminStatus();
+                setInterval(() => {
+                    this.checkAdminStatus();
+                }, 5000); // Check every 5 seconds
+            },
+
+            watch: {
+                'settingsModal.config.app_name'(newName) {
+                    if (newName) {
+                        document.title = newName;
+                    }
+                }
+            },
+
+            methods: {
+        // Text scrambling animation
+                initializeScrambling() {
+                    // Get the current app name from the template
+                    const appName = '{{ app_name }}';
+                    this.scrambleText('logo', appName, 50);
+                    this.scrambleText('serverIp', '{{ server_ip }}', 30);
+                },
+
+                updatePageTitle() {
+                    // Fetch current config and update page title
+                    fetch('/api/config')
+                        .then(response => response.json())
+                        .then(config => {
+                            if (config.app_name) {
+                                document.title = config.app_name;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Failed to load config:', error);
+                        });
+                },
+
+                toggleLiveFeed() {
+                    this.liveFeedCollapsed = !this.liveFeedCollapsed;
+                },
+
+                scrambleText(elementId, finalText, iterations) {
+            const element = document.getElementById(elementId);
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
+            let iteration = 0;
+            
+            const interval = setInterval(() => {
+                let scrambled = '';
+                for (let i = 0; i < finalText.length; i++) {
+                    if (i < iteration) {
+                        scrambled += finalText[i];
+                    } else {
+                        scrambled += chars[Math.floor(Math.random() * chars.length)];
+                    }
+                }
+                element.textContent = scrambled;
+                
+                iteration++;
+                if (iteration > finalText.length) {
+                    clearInterval(interval);
+                    element.textContent = finalText;
+                }
+            }, 100);
+                },
+
+        // Socket.IO initialization
+                initializeSocket() {
+                    this.socket = io();
+            
+                    this.socket.on('connect', () => {
+                console.log('Connected to server');
+            });
+
+                    this.socket.on('new_question', (question) => {
+                        this.addChatMessage(`New question: ${question.text}`, 'question');
+                        this.loadQuestions();
+                    });
+
+                    this.socket.on('new_comment', (comment) => {
+                        // Only show to admins
+                        if (this.isAdmin) {
+                            this.addChatMessage(`New comment: ${comment.text}`, 'comment');
+                            this.loadComments();
+                        }
+                    });
+
+                    this.socket.on('question_accepted', (question) => {
+                        this.currentQuestion = question;
+                        this.addChatMessage(`Question accepted: ${question.text}`, 'admin');
+                        this.loadQuestions();
+                    });
+
+                    this.socket.on('comment_accepted', (comment) => {
+                        this.currentComment = comment;
+                        this.addChatMessage(`Comment accepted: ${comment.text}`, 'admin');
+                        this.loadComments();
+                    });
+
+                    this.socket.on('question_answered', (data) => {
+                        this.currentQuestion = null;
+                        this.addChatMessage('Question marked as answered', 'admin');
+                        this.loadStatistics();
+                        this.loadAnsweredQuestions();
+                    });
+
+                    this.socket.on('comment_answered', (data) => {
+                        this.currentComment = null;
+                        this.addChatMessage('Comment accepted', 'admin');
+                        this.loadStatistics();
+                        this.loadAnsweredComments();
+                    });
+
+                    this.socket.on('question_deleted', (data) => {
+                        this.addChatMessage('Question deleted', 'admin');
+                        this.loadQuestions();
+                    });
+
+                    this.socket.on('current_state', (state) => {
+                if (state.question) {
+                            this.currentQuestion = state.question;
+                }
+                if (state.comment) {
+                            this.currentComment = state.comment;
+                }
+                if (state.video_source) {
+                            this.currentVideoSource = state.video_source;
+                }
+                if (state.is_admin) {
+                            this.isAdmin = true;
+                        }
+                    });
+
+                    this.socket.on('topic_added', (topic) => {
+                        this.loadTopics();
+                        this.addChatMessage(`New topic added: ${topic.text}`, 'admin');
+                    });
+
+                    this.socket.on('topic_deleted', (data) => {
+                        this.loadTopics();
+                        this.addChatMessage('Topic deleted', 'admin');
+                    });
+
+                    this.socket.on('data_reset', () => {
+                        // Clear current displays immediately
+                        this.currentQuestion = null;
+                        this.currentComment = null;
+                        // Clear all lists
+                        this.questions = [];
+                        this.pendingComments = [];
+                        this.answeredQuestions = [];
+                        this.answeredComments = [];
+                        this.topics = [];
+                        // Reset statistics
+                        this.statistics = {
+                            questions_asked: 0,
+                            questions_answered: 0,
+                            comments_given: 0,
+                            comments_accepted: 0
+                        };
+                        this.addChatMessage('All data has been reset', 'admin');
+                    });
+
+                    this.socket.on('question_removed_from_list', (data) => {
+                        if (data.clear_all) {
+                            this.questions = [];
+                        } else {
+                            this.loadQuestions();
+                        }
+                    });
+
+                    this.socket.on('comment_removed_from_list', (data) => {
+                        if (data.clear_all) {
+                            this.pendingComments = [];
+                        } else {
+                            this.loadComments();
+                        }
+                    });
+
+                    this.socket.on('answered_questions_updated', (questions) => {
+                        this.answeredQuestions = questions;
+                    });
+
+                    this.socket.on('answered_comments_updated', (comments) => {
+                        this.answeredComments = comments;
+                    });
+
+                    this.socket.on('admin_logged_in', (data) => {
+                        this.isAdmin = true;
+                        this.addChatMessage('Admin logged in', 'admin');
+                        console.log('🔐 Admin logged in via socket');
+                        // Load admin data when admin logs in
+                        this.loadQuestions();
+                        this.loadComments();
+                        this.loadWhitelist();
+                        this.loadBlacklist();
+                    });
+
+                    this.socket.on('admin_action_notification', (data) => {
+                        let messageType = 'admin';
+                        let prefix = '[ADMIN ACTION]';
+                        
+                        // Handle different types of notifications
+                        if (data.action === 'rate_limit_hit') {
+                            prefix = '[RATE LIMIT]';
+                            messageType = 'rate-limit';
+                        } else if (data.action === 'excessive_rate_limit') {
+                            prefix = '[EXCESSIVE RATE LIMIT]';
+                            messageType = 'excessive-limit';
+                        } else if (data.action === 'topic_added' || data.action === 'topic_removed') {
+                            prefix = '[TOPIC UPDATE]';
+                            messageType = 'topic-update';
+                        }
+                        
+                        this.addChatMessage(`${prefix} ${data.message}`, messageType);
+                    });
+
+                    this.socket.on('video_source_changed', (data) => {
+                        this.currentVideoSource = data.url;
+                        this.addChatMessage(`Video source changed to: ${data.original_url}`, 'admin');
+                    });
+
+                    this.socket.on('current_question_deleted', (data) => {
+                        this.currentQuestion = null;
+                        this.addChatMessage('Current question deleted', 'admin');
+                    });
+
+                    this.socket.on('rate_limit_hit', (data) => {
+                        this.addChatMessage(`Rate limit hit: ${data.ip} - ${data.message}`, 'admin');
+                    });
+
+                    this.socket.on('ip_auto_whitelisted', (data) => {
+                        this.addChatMessage(`IP ${data.ip} auto-whitelisted: ${data.reason}`, 'admin');
+                        this.loadWhitelist();
+                    });
+
+                    this.socket.on('ip_auto_blacklisted', (data) => {
+                        this.addChatMessage(`IP ${data.ip} auto-blacklisted: ${data.reason}`, 'admin');
+                        this.loadBlacklist();
+                    });
+
+                    // Giveaway events
+                    this.socket.on('giveaway_winner_selected', (data) => {
+                        // Show notification to all users
+                        this.addChatMessage(`Giveaway "${data.giveaway_name}" - Winner selected: ${data.winner_ip} won "${data.item.name}"`, 'admin');
+                        
+                        // Only show the winner modal to the actual winner
+                        if (data.is_winner) {
+                            this.winnerModal.show = true;
+                            this.winnerModal.giveaway_id = data.giveaway_id;
+                            this.winnerModal.giveaway_name = data.giveaway_name;
+                            this.winnerModal.item = data.item;
+                            this.winnerModal.timeout = data.timeout;
+                            this.startWinnerCountdown(data.timeout);
+                        }
+                    });
+
+                    this.socket.on('giveaway_item_details', (data) => {
+                        this.itemDetailsModal.show = true;
+                        this.itemDetailsModal.giveaway_name = data.giveaway_name;
+                        this.itemDetailsModal.item = data.item;
+                    });
+
+                    this.socket.on('giveaway_created', (data) => {
+                        this.loadGiveaways();
+                    });
+
+                    this.socket.on('giveaway_deleted', (data) => {
+                        this.loadGiveaways();
+                    });
+
+                    this.socket.on('giveaway_item_added', (data) => {
+                        this.loadGiveaways();
+                    });
+
+                    this.socket.on('giveaway_item_deleted', (data) => {
+                        this.loadGiveaways();
+                    });
+
+                    this.socket.on('giveaway_pay_it_forward', (data) => {
+                        this.addChatMessage(`Giveaway "${data.giveaway_name}" - Pay It Forward initiated`, 'admin');
+                    });
+
+                    this.socket.on('giveaway_no_winner', (data) => {
+                        this.addChatMessage(`Giveaway "${data.giveaway_name}" - No eligible winners found`, 'admin');
+                    });
+
+                    this.socket.on('giveaway_item_removed', (data) => {
+                        this.addChatMessage(`Giveaway "${data.giveaway_name}" - Item removed (${data.reason})`, 'admin');
+                    });
+
+                    this.socket.on('giveaway_ended', (data) => {
+                        this.addChatMessage(`Giveaway "${data.giveaway_name}" has ended`, 'admin');
+                        this.loadGiveaways();
+                    });
+
+                    this.socket.on('giveaway_paused', (data) => {
+                        let reason = data.reason || 'unknown';
+                        let message = `Giveaway "${data.giveaway_name}" has been paused`;
+                        if (reason === 'no_eligible_winners') {
+                            message += ' - No eligible winners found';
+                        } else if (reason === 'no_eligible_winners_payitforward') {
+                            message += ' - No eligible winners found for pay-it-forward';
+                        }
+                        this.addChatMessage(message, 'admin');
+                        this.loadGiveaways();
+                    });
+                },
+
+                // Konami code detection (kept for potential future use)
+                setupKonamiCode() {
+                    document.addEventListener('keydown', (e) => {
+                // Only listen for arrow keys
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+                            this.konamiCode.push(e.code);
+                    
+                    // Keep only the last 8 key presses
+                            if (this.konamiCode.length > this.konamiSequence.length) {
+                                this.konamiCode.shift();
+                    }
+                    
+                    // Check if sequence matches Konami code
+                            if (this.konamiCode.length === this.konamiSequence.length) {
+                        let matches = true;
+                                for (let i = 0; i < this.konamiSequence.length; i++) {
+                                    if (this.konamiCode[i] !== this.konamiSequence[i]) {
+                                matches = false;
+                                break;
+                            }
+                        }
+                        
+                        if (matches) {
+                                    this.openAdminModal();
+                                    this.konamiCode = [];
+                        }
+                    }
+                } else {
+                    // Reset sequence if non-arrow key is pressed
+                            this.konamiCode = [];
+                        }
+                    });
+                },
+
+
+                showConfirmModal(title, message, onConfirm) {
+                    this.confirmModal.title = title;
+                    this.confirmModal.message = message;
+                    this.confirmModal.onConfirm = onConfirm;
+                    this.confirmModal.show = true;
+                },
+
+                hideConfirmModal() {
+                    this.confirmModal.show = false;
+                    this.confirmModal.onConfirm = null;
+                },
+
+        // Admin functions
+                openAdminModal() {
+                    this.showAdminModal = true;
+                },
+
+                closeAdminModal() {
+                    this.showAdminModal = false;
+                    this.adminPassword = '';
+                },
+
+                adminLogin() {
+                    fetch('/api/admin/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ password: this.adminPassword })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.isAdmin = true;
+                            this.closeAdminModal();
+                            this.addChatMessage('Admin logged in', 'admin');
+                            // Load admin data when login is successful
+                            this.loadQuestions();
+                            this.loadComments();
+                            // Update admin status on server
+                            this.socket.emit('admin_status_update');
+                        } else {
+                            alert(data.error || 'Invalid password');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Login error:', error);
+                        alert('Login failed');
+                    });
+                },
+
+                adminLogout() {
+                    fetch('/api/admin/logout', {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.isAdmin = false;
+                            this.addChatMessage('Admin logged out', 'admin');
+                            // Update admin status on server
+                            this.socket.emit('admin_status_update');
+                        } else {
+                            alert('Logout failed');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Logout error:', error);
+                        alert('Logout failed');
+                    });
+                },
+
+                checkAdminStatus() {
+                    fetch('/api/admin/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        const wasAdmin = this.isAdmin;
+                        this.isAdmin = data.is_admin;
+                        
+                        if (wasAdmin && !this.isAdmin) {
+                            console.log('🔐 Admin session lost!');
+                            this.addChatMessage('Admin session lost - please log in again', 'admin');
+                        } else if (!wasAdmin && this.isAdmin) {
+                            console.log('🔐 Admin session restored!');
+                            this.addChatMessage('Admin session restored', 'admin');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking admin status:', error);
+                    });
+                },
+
+                confirmAction() {
+                    if (this.confirmModal.onConfirm) {
+                        this.confirmModal.onConfirm();
+                    }
+                    this.hideConfirmModal();
+                },
+
+                // Video source functions
+                openVideoSourceModal() {
+                    this.videoSourceModal.show = true;
+                    this.videoSourceModal.url = '';
+                },
+
+                closeVideoSourceModal() {
+                    this.videoSourceModal.show = false;
+                    this.videoSourceModal.url = '';
+                },
+
+                changeVideoSource() {
+                    if (!this.videoSourceModal.url.trim()) {
+                        alert('Please enter a video URL');
+                        return;
+                    }
+
+                    const embedUrl = this.parseVideoUrl(this.videoSourceModal.url);
+                    if (!embedUrl) {
+                        alert('Invalid video URL. Please enter a valid YouTube or Twitch URL.');
+                        return;
+                    }
+
+                    // Send to server to broadcast to all clients
+                    fetch('/api/admin/video-source', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ 
+                            url: embedUrl,
+                            original_url: this.videoSourceModal.url
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.currentVideoSource = embedUrl;
+                            this.closeVideoSourceModal();
+                            this.addChatMessage(`Video source changed to: ${this.videoSourceModal.url}`, 'admin');
+                        } else {
+                            alert(data.error || 'Failed to change video source');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Video source change error:', error);
+                        alert('Failed to change video source');
+                    });
+                },
+
+                parseVideoUrl(url) {
+                    // YouTube URL parsing
+                    if (url.includes('youtube.com/watch')) {
+                        const match = url.match(/[?&]v=([^&]+)/);
+                        if (match) {
+                            return `https://www.youtube.com/embed/${match[1]}`;
+                        }
+                    }
+                    
+                    // YouTube short URL
+                    if (url.includes('youtu.be/')) {
+                        const match = url.match(/youtu\.be\/([^?]+)/);
+                        if (match) {
+                            return `https://www.youtube.com/embed/${match[1]}`;
+                        }
+                    }
+                    
+                    // YouTube embed URL (already in correct format)
+                    if (url.includes('youtube.com/embed/')) {
+                        return url;
+                    }
+                    
+                    // Twitch URL parsing
+                    if (url.includes('twitch.tv/')) {
+                        const match = url.match(/twitch\.tv\/([^/?]+)/);
+                        if (match) {
+                            return `https://player.twitch.tv/?channel=${match[1]}&parent=${window.location.hostname}`;
+                        }
+                    }
+                    
+                    // If it's just a video ID, assume YouTube
+                    if (/^[a-zA-Z0-9_-]+$/.test(url)) {
+                        return `https://www.youtube.com/embed/${url}`;
+                    }
+                    
+                    return null;
+                },
+
+        // Mobile menu functions
+                toggleMobileMenu(menuId) {
+            // Close all other mobile menus first
+            const allMobileMenus = document.querySelectorAll('[id^="mobile"][id$="Menu"]');
+            allMobileMenus.forEach(menu => {
+                if (menu.id !== 'mobile' + menuId.charAt(0).toUpperCase() + menuId.slice(1) + 'Menu') {
+                    menu.classList.add('hidden');
+                }
+            });
+            
+            const menu = document.getElementById('mobile' + menuId.charAt(0).toUpperCase() + menuId.slice(1) + 'Menu');
+            if (menu) {
+                menu.classList.toggle('hidden');
+                
+                        // Load data when opening menus
+                        if (menuId === 'adminQuestions' && this.isAdmin) {
+                            this.loadQuestions();
+                        } else if (menuId === 'adminComments' && this.isAdmin) {
+                            this.loadComments();
+                        } else if (menuId === 'adminTopics' && this.isAdmin) {
+                            this.loadTopics();
+                        } else if (menuId === 'adminACL' && this.isAdmin) {
+                            this.loadWhitelist();
+                            this.loadBlacklist();
+                } else if (menuId === 'topics') {
+                            this.loadTopics();
+                        } else if (menuId === 'questions') {
+                            this.loadAnsweredQuestions();
+                        } else if (menuId === 'comments') {
+                            this.loadAnsweredComments();
+                        } else if (menuId === 'statistics') {
+                            this.loadStatistics();
+                        }
+            }
+                },
+
+                closeMobileMenu(menuId) {
+            const menu = document.getElementById('mobile' + menuId.charAt(0).toUpperCase() + menuId.slice(1) + 'Menu');
+            if (menu) {
+                menu.classList.add('hidden');
+            }
+                },
+
+                submitMobileQuestion() {
+            const questionText = document.getElementById('mobileQuestionInput').value.trim();
+            if (!questionText) return;
+
+            fetch('/api/questions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ question: questionText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    document.getElementById('mobileQuestionInput').value = '';
+                            this.closeMobileMenu('ask');
+                            this.addChatMessage(`Question submitted: ${questionText}`, 'user');
+                }
+            });
+                },
+
+                submitMobileComment() {
+            const commentText = document.getElementById('mobileCommentInput').value.trim();
+            if (!commentText) return;
+
+            fetch('/api/comments', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ comment: commentText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    document.getElementById('mobileCommentInput').value = '';
+                            this.closeMobileMenu('comment');
+                            this.addChatMessage(`Comment submitted: ${commentText}`, 'user');
+                        }
+                    });
+                },
+
+                // Question/Comment functions
+                answerQuestion() {
+                    if (!this.currentQuestion) return;
+                    
+                    fetch(`/api/questions/${this.currentQuestion.id}/answer`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                            this.currentQuestion = null;
+                        }
+                    });
+                },
+
+                removeQuestion() {
+                    if (!this.currentQuestion) return;
+                    
+                    fetch(`/api/questions/${this.currentQuestion.id}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.currentQuestion = null;
+                        }
+                    });
+                },
+
+                answerComment() {
+                    if (!this.currentComment) return;
+            
+                    fetch(`/api/comments/${this.currentComment.id}/answer`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                        body: JSON.stringify({ text: this.currentComment.text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                            this.currentComment = null;
+                        }
+                    });
+                },
+
+                removeComment() {
+                    if (!this.currentComment) return;
+                    
+                    fetch(`/api/comments/${this.currentComment.id}/reject`, {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.currentComment = null;
+                        }
+                    });
+                },
+
+                // Admin functions
+                acceptQuestion(questionId) {
+            fetch(`/api/questions/${questionId}/accept`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.id) {
+                            this.loadQuestions();
+                }
+            });
+                },
+
+                acceptComment(commentId) {
+            fetch(`/api/comments/${commentId}/accept`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.id) {
+                            this.loadComments();
+                        }
+                    });
+                },
+
+                deleteComment(commentId) {
+                    fetch(`/api/comments/${commentId}/reject`, {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.loadComments();
+                            this.addChatMessage('Comment deleted', 'admin');
+                        }
+                    });
+                },
+
+                deleteQuestion(questionId) {
+                    fetch(`/api/questions/${questionId}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.loadQuestions();
+                        }
+                    });
+                },
+
+        // Chat functions
+                addChatMessage(message, type) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = 'chat-message mb-2 p-2 rounded';
+            
+            const timestamp = new Date().toLocaleTimeString();
+            let typeClass = 'bg-gray-800'; // default
+            
+            // Set background color based on message type
+            if (type === 'admin') typeClass = 'bg-green-900';
+            else if (type === 'question') typeClass = 'bg-blue-900';
+            else if (type === 'comment') typeClass = 'bg-purple-900';
+            else if (type === 'user') typeClass = 'bg-gray-800';
+            else if (type === 'rate-limit') typeClass = 'bg-orange-900';
+            else if (type === 'excessive-limit') typeClass = 'bg-red-900';
+            else if (type === 'topic-update') typeClass = 'bg-green-800';
+            
+            div.className += ` ${typeClass}`;
+            
+            // Add special styling for new message types
+            if (type === 'rate-limit' || type === 'excessive-limit' || type === 'topic-update') {
+                div.className += ` ${type}`;
+            }
+            
+            div.innerHTML = `
+                <div class="text-xs text-gray-400">${timestamp}</div>
+                <div>${message}</div>
+            `;
+            
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+                },
+
+                // Data loading functions
+                loadQuestions() {
+                    fetch('/api/questions')
+                    .then(response => response.json())
+                    .then(questions => {
+                        this.questions = questions;
+                    });
+                },
+
+                loadComments() {
+                    fetch('/api/comments')
+                    .then(response => response.json())
+                    .then(comments => {
+                        this.pendingComments = comments;
+                    });
+                },
+
+                loadTopics() {
+                    fetch('/api/topics')
+                    .then(response => response.json())
+                    .then(topics => {
+                        this.topics = topics;
+                    });
+                },
+
+                loadStatistics() {
+                    fetch('/api/statistics')
+                    .then(response => response.json())
+                    .then(stats => {
+                        this.statistics = stats;
+                    });
+                },
+
+                loadAnsweredQuestions() {
+                    fetch('/api/questions_answered')
+                    .then(response => response.json())
+                    .then(questions => {
+                        this.answeredQuestions = questions;
+                    });
+                },
+
+                loadAnsweredComments() {
+                    fetch('/api/comments_answered')
+                    .then(response => response.json())
+                    .then(comments => {
+                        this.answeredComments = comments;
+                    });
+                },
+
+                // Topic functions
+                addNewTopic() {
+            const topicText = prompt('Enter new topic:');
+            if (!topicText) return;
+            
+            fetch('/api/topics', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ topic: topicText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                            this.loadTopics();
+                        }
+                    });
+                },
+
+                deleteTopic(topicId) {
+                    this.showConfirmModal(
+                        'Delete Topic',
+                        'Are you sure you want to delete this topic?',
+                        () => {
+            fetch(`/api/topics/${topicId}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                                    this.loadTopics();
+                }
+            });
+        }
+                    );
+                },
+
+                resetAllData() {
+                    if (!this.isAdmin) return;
+            
+                    this.showConfirmModal(
+                        'Reset All Data',
+                        'Are you sure you want to reset ALL data? This cannot be undone!',
+                        () => {
+            fetch('/api/admin/reset', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                                    this.addChatMessage('All data has been reset', 'admin');
+                }
+            });
+        }
+                    );
+                },
+
+                // Settings functions
+                openSettingsModal() {
+                    this.settingsModal.show = true;
+                    this.loadSettings();
+                },
+
+                closeSettingsModal() {
+                    this.settingsModal.show = false;
+                },
+
+                loadSettings() {
+                    fetch('/api/admin/config')
+                        .then(response => response.json())
+                        .then(config => {
+                            // Initialize with default values if config is empty
+                            this.settingsModal.config = {
+                                rate_limit_global: config.rate_limit_global || '30:5',
+                                rate_limit_per_ip: config.rate_limit_per_ip || '3:30',
+                                rate_limit_global_block_for: config.rate_limit_global_block_for || 120,
+                                rate_limit_per_ip_block_for: config.rate_limit_per_ip_block_for || 120,
+                                rate_limit_excessive: config.rate_limit_excessive || '5:60',
+                                rate_limit_excessive_block_for: config.rate_limit_excessive_block_for || 600,
+                                auto_whitelist_comments_accepted: config.auto_whitelist_comments_accepted || '3:1000',
+                                auto_whitelist_questions_answered: config.auto_whitelist_questions_answered || '2:1000',
+                                auto_blacklist_comments_rejected: config.auto_blacklist_comments_rejected || '3:1000',
+                                auto_blacklist_questions_rejected: config.auto_blacklist_questions_rejected || '3:1000',
+                                ...config
+                            };
+                        })
+                        .catch(error => {
+                            console.error('Error loading settings:', error);
+                            // Set default values on error
+                            this.settingsModal.config = {
+                                rate_limit_global: '30:5',
+                                rate_limit_per_ip: '3:30',
+                                rate_limit_global_block_for: 120,
+                                rate_limit_per_ip_block_for: 120,
+                                rate_limit_excessive: '5:60',
+                                rate_limit_excessive_block_for: 600,
+                                auto_whitelist_comments_accepted: '3:1000',
+                                auto_whitelist_questions_answered: '2:1000',
+                                auto_blacklist_comments_rejected: '3:1000',
+                                auto_blacklist_questions_rejected: '3:1000'
+                            };
+                        });
+                },
+
+                saveSettings() {
+                    fetch('/api/admin/config', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(this.settingsModal.config)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.addChatMessage('Settings saved successfully', 'admin');
+                            this.closeSettingsModal();
+                        } else {
+                            alert(data.error || 'Failed to save settings');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error saving settings:', error);
+                        alert('Failed to save settings');
+                    });
+                },
+
+                // IP Management functions
+                openIPModal(ip) {
+                    this.ipModal.show = true;
+                    this.ipModal.ip = ip;
+                    this.ipModal.history = []; // Load IP history here
+                },
+
+                closeIPModal() {
+                    this.ipModal.show = false;
+                    this.ipModal.ip = '';
+                    this.ipModal.history = [];
+                },
+
+                whitelistIP(ip) {
+                    const reason = prompt('Reason for whitelisting:');
+                    if (reason === null) return;
+
+                    fetch('/api/admin/whitelist', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ ip: ip, reason: reason })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.addChatMessage(`IP ${ip} whitelisted`, 'admin');
+                            this.loadWhitelist();
+                        } else {
+                            alert(data.error || 'Failed to whitelist IP');
+                        }
+                    });
+                },
+
+                blacklistIP(ip) {
+                    const reason = prompt('Reason for blacklisting:');
+                    if (reason === null) return;
+
+                    fetch('/api/admin/blacklist', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ ip: ip, reason: reason })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.addChatMessage(`IP ${ip} blacklisted`, 'admin');
+                            this.loadBlacklist();
+                        } else {
+                            alert(data.error || 'Failed to blacklist IP');
+                        }
+                    });
+                },
+
+                // ACL Management functions
+                loadWhitelist() {
+                    fetch('/api/admin/whitelist')
+                        .then(response => response.json())
+                        .then(whitelist => {
+                            // Filter out entries with undefined or invalid IPs
+                            this.whitelist = whitelist.filter(entry => entry && entry.ip && entry.ip !== 'undefined');
+                        });
+                },
+
+                loadBlacklist() {
+                    fetch('/api/admin/blacklist')
+                        .then(response => response.json())
+                        .then(blacklist => {
+                            // Filter out entries with undefined or invalid IPs
+                            this.blacklist = blacklist.filter(entry => entry && entry.ip && entry.ip !== 'undefined');
+                        });
+                },
+
+                removeFromWhitelist(ip) {
+                    fetch(`/api/admin/whitelist/${ip}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.addChatMessage(`IP ${ip} removed from whitelist`, 'admin');
+                            this.loadWhitelist();
+                        }
+                    });
+                },
+
+                removeFromBlacklist(ip) {
+                    fetch(`/api/admin/blacklist/${ip}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.addChatMessage(`IP ${ip} removed from blacklist`, 'admin');
+                            this.loadBlacklist();
+                        }
+                    });
+                },
+
+                // Giveaway functions
+                openGiveawayModal() {
+                    this.giveawayModal.show = true;
+                    this.loadGiveaways();
+                },
+
+                closeGiveawayModal() {
+                    this.giveawayModal.show = false;
+                    this.giveawayModal.newGiveaway = {
+                        name: '',
+                        delay_minutes: 0,
+                        recurring_interval: 0,
+                        remove_on_accept: true
+                    };
+                },
+
+                createGiveaway() {
+                    if (!this.giveawayModal.newGiveaway.name.trim()) {
+                        alert('Please enter a giveaway name');
+                        return;
+                    }
+
+                    fetch('/api/giveaways', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(this.giveawayModal.newGiveaway)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            alert(data.error);
+                        } else {
+                            this.loadGiveaways();
+                            this.addChatMessage(`Giveaway created: ${data.name}`, 'admin');
+                            // Reset form for next giveaway
+                            this.giveawayModal.newGiveaway = {
+                                name: '',
+                                delay_minutes: 0,
+                                recurring_interval: 0,
+                                remove_on_accept: true
+                            };
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error creating giveaway:', error);
+                        alert('Failed to create giveaway');
+                    });
+                },
+
+                deleteGiveaway(giveawayId) {
+                    if (!confirm('Are you sure you want to delete this giveaway?')) {
+                        return;
+                    }
+
+                    fetch(`/api/giveaways/${giveawayId}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.loadGiveaways();
+                            this.addChatMessage('Giveaway deleted', 'admin');
+                        } else {
+                            alert(data.error || 'Failed to delete giveaway');
+                        }
+                    });
+                },
+
+                startGiveaway(giveawayId) {
+                    console.log('🚀 Starting giveaway:', giveawayId);
+                    console.log('🔐 Current admin status:', this.isAdmin);
+                    
+                    // Check admin status before attempting to start
+                    this.checkAdminStatus();
+                    
+                    if (!this.isAdmin) {
+                        console.error('❌ Not admin, cannot start giveaway');
+                        alert('You must be logged in as admin to start giveaways');
+                        return;
+                    }
+                    
+                    fetch(`/api/giveaways/${giveawayId}/start`, {
+                        method: 'POST'
+                    })
+                    .then(response => {
+                        console.log('📡 Start giveaway response status:', response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('📡 Start giveaway response data:', data);
+                        if (data.success) {
+                            this.loadGiveaways();
+                            this.addChatMessage('Giveaway started', 'admin');
+                        } else {
+                            console.error('❌ Start giveaway failed:', data.error);
+                            alert(data.error || 'Failed to start giveaway');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ Error starting giveaway:', error);
+                        alert('Failed to start giveaway');
+                    });
+                },
+
+                stopGiveaway(giveawayId) {
+                    if (!confirm('Are you sure you want to stop this giveaway?')) {
+                        return;
+                    }
+
+                    fetch(`/api/giveaways/${giveawayId}/stop`, {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.loadGiveaways();
+                            this.addChatMessage('Giveaway stopped', 'admin');
+                        } else {
+                            alert(data.error || 'Failed to stop giveaway');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error stopping giveaway:', error);
+                        alert('Failed to stop giveaway');
+                    });
+                },
+
+                pauseGiveaway(giveawayId) {
+                    fetch(`/api/giveaways/${giveawayId}/pause`, {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.loadGiveaways();
+                            this.addChatMessage('Giveaway paused', 'admin');
+                        } else {
+                            alert(data.error || 'Failed to pause giveaway');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error pausing giveaway:', error);
+                        alert('Failed to pause giveaway');
+                    });
+                },
+
+                showAddItemForm(giveawayId) {
+                    this.addItemModal.show = true;
+                    this.addItemModal.giveaway_id = giveawayId;
+                    this.addItemModal.name = '';
+                    this.addItemModal.link = '';
+                },
+
+                closeAddItemModal() {
+                    this.addItemModal.show = false;
+                    this.addItemModal.giveaway_id = '';
+                    this.addItemModal.name = '';
+                    this.addItemModal.link = '';
+                },
+
+                addGiveawayItem() {
+                    if (!this.addItemModal.name.trim()) {
+                        alert('Please enter an item name');
+                        return;
+                    }
+
+                    fetch(`/api/giveaways/${this.addItemModal.giveaway_id}/items`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            name: this.addItemModal.name,
+                            link: this.addItemModal.link
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            alert(data.error);
+                        } else {
+                            this.loadGiveaways();
+                            this.closeAddItemModal();
+                            this.addChatMessage(`Item added to giveaway`, 'admin');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error adding item:', error);
+                        alert('Failed to add item');
+                    });
+                },
+
+                deleteGiveawayItem(giveawayId, itemId) {
+                    if (!confirm('Are you sure you want to delete this item?')) {
+                        return;
+                    }
+
+                    fetch(`/api/giveaways/${giveawayId}/items/${itemId}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.loadGiveaways();
+                            this.addChatMessage('Item deleted from giveaway', 'admin');
+                        } else {
+                            alert(data.error || 'Failed to delete item');
+                        }
+                    });
+                },
+
+                loadGiveaways() {
+                    fetch('/api/giveaways')
+                    .then(response => response.json())
+                    .then(giveaways => {
+                        this.giveaways = giveaways;
+                    });
+                },
+
+                acceptGiveaway() {
+                    this.stopWinnerCountdown();
+                    fetch(`/api/giveaways/${this.winnerModal.giveaway_id}/accept`, {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.winnerModal.show = false;
+                            this.itemDetailsModal.show = true;
+                            this.itemDetailsModal.giveaway_name = this.winnerModal.giveaway_name;
+                            this.itemDetailsModal.item = data.item;
+                        } else {
+                            alert(data.error || 'Failed to accept giveaway');
+                        }
+                    });
+                },
+
+                payItForward() {
+                    this.stopWinnerCountdown();
+                    fetch(`/api/giveaways/${this.winnerModal.giveaway_id}/payitforward`, {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.winnerModal.show = false;
+                        } else {
+                            alert(data.error || 'Failed to pay it forward');
+                        }
+                    });
+                },
+
+                closeItemDetailsModal() {
+                    this.itemDetailsModal.show = false;
+                },
+
+                startWinnerCountdown(timeout) {
+                    this.winnerCountdown = timeout;
+                    if (this.winnerCountdownTimer) {
+                        clearInterval(this.winnerCountdownTimer);
+                    }
+                    this.winnerCountdownTimer = setInterval(() => {
+                        this.winnerCountdown--;
+                        if (this.winnerCountdown <= 0) {
+                            clearInterval(this.winnerCountdownTimer);
+                            this.winnerCountdownTimer = null;
+                            // Timeout reached, close the modal
+                            this.winnerModal.show = false;
+                        }
+                    }, 1000);
+                },
+
+                stopWinnerCountdown() {
+                    if (this.winnerCountdownTimer) {
+                        clearInterval(this.winnerCountdownTimer);
+                        this.winnerCountdownTimer = null;
+                    }
+                    this.winnerCountdown = 0;
+                },
+
+                closeWinnerModal() {
+                    this.stopWinnerCountdown();
+                    this.winnerModal.show = false;
+                }
+            }
+        }).mount('#app');
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+[
+  {
+    "id": "0de57345-7f73-40c7-bbe1-ee0f2386f702",
+    "name": "Privacy Protection Kit",
+    "items": [
+      {
+        "id": "50091c40-8898-4269-ab7e-71a2016834f4",
+        "name": "VPN Subscription (1 Year)",
+        "link": "https://example.com/vpn",
+        "added_at": "2025-09-25T18:25:16.758144"
+      },
+      {
+        "id": "8a1025bd-53b7-4551-bf2d-4dabe24a1b7c",
+        "name": "Password Manager Premium",
+        "link": "https://example.com/password-manager",
+        "added_at": "2025-09-25T18:25:21.625326"
+      },
+      {
+        "id": "bbbdb9c6-afc8-4d40-9aa9-cd547cef6581",
+        "name": "Privacy-Focused Browser Extension Pack",
+        "link": "https://example.com/extensions",
+        "added_at": "2025-09-25T18:25:26.305214"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T18:25:11.460231",
+    "status": "paused"
+  },
+  {
+    "id": "93851bd2-3294-4857-ab81-54e6f5fbe0a5",
+    "name": "VP.NET 1 Month",
+    "items": [
+      {
+        "id": "1f3663d2-97b1-4dbe-861d-59fb15b39827",
+        "name": "item1",
+        "link": "item 1 link",
+        "added_at": "2025-09-25T18:41:27.238895"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": "5",
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T18:40:56.265179",
+    "status": "stopped"
+  },
+  {
+    "id": "d3ca590f-3431-4742-a81c-26caac7f5933",
+    "name": "test",
+    "items": [
+      {
+        "id": "75db504a-4d9c-4c39-a23d-bedf79c66424",
+        "name": "tttttt",
+        "link": "",
+        "added_at": "2025-09-25T19:45:58.368223"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T18:42:37.638400",
+    "status": "active"
+  },
+  {
+    "id": "6c00d0d5-937f-4525-84b0-015d724f411b",
+    "name": "Test Giveaway",
+    "items": [
+      {
+        "id": "2c03f705-2cfe-4da1-a143-cb585ad6f6cf",
+        "name": "Test Item",
+        "link": "https://example.com/test",
+        "added_at": "2025-09-25T19:05:51.573832"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:05:51.567527",
+    "status": "paused"
+  },
+  {
+    "id": "84a63b7c-e537-47a2-b1b2-da39f5275605",
+    "name": "Test Giveaway",
+    "items": [
+      {
+        "id": "b8da1fe4-0171-4f55-9ff7-f6fecbdc9d5a",
+        "name": "Test Item",
+        "link": "https://example.com/test",
+        "added_at": "2025-09-25T19:06:16.793650"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:06:16.770032",
+    "status": "paused"
+  },
+  {
+    "id": "49ec81fe-bef0-4506-b921-97d20a318d2b",
+    "name": "Test Giveaway",
+    "items": [
+      {
+        "id": "fb9a943f-354f-4c8b-9136-511791a86b81",
+        "name": "Test Item",
+        "link": "https://example.com/test",
+        "added_at": "2025-09-25T19:06:46.726440"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:06:46.720660",
+    "status": "active"
+  },
+  {
+    "id": "228c212f-cd70-435b-8cb7-ce8ee306d0c0",
+    "name": "t",
+    "items": [
+      {
+        "id": "ce4008bb-b402-4876-8e17-6f8fb8d2d660",
+        "name": "ttt",
+        "link": "ttttt",
+        "added_at": "2025-09-25T19:09:46.381449"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:09:40.142387",
+    "status": "paused"
+  },
+  {
+    "id": "021723ae-c74c-41c5-aeef-057b4149def4",
+    "name": "Test Giveaway Fix",
+    "items": [
+      {
+        "id": "3ada5960-4859-42d4-a26b-78e90f1f0cde",
+        "name": "Test Item 1",
+        "link": "https://example.com/item1",
+        "added_at": "2025-09-25T19:13:48.396246"
+      },
+      {
+        "id": "b5f94d89-446b-4f0f-8f49-ee2e4e637c3c",
+        "name": "Test Item 2",
+        "link": "https://example.com/item2",
+        "added_at": "2025-09-25T19:13:48.399758"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:13:48.392135",
+    "status": "paused"
+  },
+  {
+    "id": "f93ccf09-fb89-46b8-8193-c9fa84f6ad0f",
+    "name": "Admin Exclusion Test",
+    "items": [
+      {
+        "id": "9625dc33-f487-4605-b927-089e0fd91617",
+        "name": "Test Item 1",
+        "link": "https://example.com/item1",
+        "added_at": "2025-09-25T19:21:03.418784"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:21:03.414498",
+    "status": "paused"
+  },
+  {
+    "id": "6584e9ab-719f-4aeb-985c-3e411c3b2d55",
+    "name": "IP Detection Test",
+    "items": [
+      {
+        "id": "37585db5-ffc9-4b69-a0c8-c1aa5f6a6f73",
+        "name": "Test Item 1",
+        "link": "https://example.com/item1",
+        "added_at": "2025-09-25T19:26:08.326906"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:26:08.316691",
+    "status": "paused"
+  },
+  {
+    "id": "6f0bcb2c-ab53-4677-a9ca-47d11fbef47c",
+    "name": "Browser Distinction Test",
+    "items": [
+      {
+        "id": "f6f4a8b2-f96d-497f-9128-61fe20588f33",
+        "name": "Test Item",
+        "link": "https://example.com",
+        "added_at": "2025-09-25T19:27:40.061954"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:27:40.056254",
+    "status": "active"
+  },
+  {
+    "id": "7b9caa1f-299a-4cdb-8250-723b1c725e94",
+    "name": "Session Admin Test",
+    "items": [
+      {
+        "id": "2d26c4e8-84e4-4133-9848-e6792ecb1fab",
+        "name": "Test Item",
+        "link": "https://example.com",
+        "added_at": "2025-09-25T19:33:06.544529"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:33:06.532191",
+    "status": "active"
+  },
+  {
+    "id": "66443926-0ebe-476a-8677-4eb624a31e75",
+    "name": "Winner Modal Test",
+    "items": [
+      {
+        "id": "2a02da94-d7b1-4a6f-af66-ec05ff1e9ffd",
+        "name": "Test Item",
+        "link": "https://example.com",
+        "added_at": "2025-09-25T19:43:19.797820"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:43:19.785197",
+    "status": "active"
+  },
+  {
+    "id": "09bdc452-2f39-44d0-9c97-8896451969f4",
+    "name": "Resume Test Giveaway",
+    "items": [
+      {
+        "id": "02230404-a78f-47ac-bc78-4d9e7a6b6256",
+        "name": "Test Item 1",
+        "link": "https://example.com/item1",
+        "added_at": "2025-09-25T19:49:47.721317"
+      },
+      {
+        "id": "26768b0e-ce19-4a11-8e30-ff1dde004d9b",
+        "name": "Test Item 2",
+        "link": "https://example.com/item2",
+        "added_at": "2025-09-25T19:49:47.725386"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:49:47.714095",
+    "status": "stopped"
+  },
+  {
+    "id": "5a364c76-4658-444e-b506-df70f78cc47d",
+    "name": "Comprehensive Test Giveaway",
+    "items": [
+      {
+        "id": "476c75c0-96ff-4853-9269-3488d0ab2c47",
+        "name": "Test Item 1",
+        "link": "https://example.com/item1",
+        "added_at": "2025-09-25T19:58:12.140890"
+      },
+      {
+        "id": "9d65fa6c-5637-4ee1-9ea8-bce13b39cff0",
+        "name": "Test Item 2",
+        "link": "https://example.com/item2",
+        "added_at": "2025-09-25T19:58:12.147342"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T19:58:12.137366",
+    "status": "stopped"
+  },
+  {
+    "id": "dec3d7fc-c7c7-4e16-869f-2a68180f9211",
+    "name": "Admin Session Test Giveaway",
+    "items": [
+      {
+        "id": "02ed8afc-7ce7-4f02-a7f5-e98d8964ea75",
+        "name": "Test Item",
+        "link": "https://example.com",
+        "added_at": "2025-09-25T20:04:29.514236"
+      }
+    ],
+    "recurring": false,
+    "recurring_interval": 0,
+    "remove_on_accept": true,
+    "created_at": "2025-09-25T20:04:29.509557",
+    "status": "stopped"
+  }
+]
